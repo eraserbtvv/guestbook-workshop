@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Секреты и локальные настройки
+.env
+.env.*
+!.env.example
+
+# Инструменты и IDE
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.idea/
+.vscode/
