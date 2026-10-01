@@ -1,4 +1,4 @@
-# 📒 guestbook — стартовый репозиторий воркшопа
+# 📒 guestbook
 
 Небольшая **гостевая книга** на FastAPI: можно оставить сообщение и посмотреть все оставленные. Данные хранятся в PostgreSQL.
 
@@ -9,66 +9,55 @@
 - `GET /messages` — список сообщений (новые сверху)
 - `POST /messages` — добавить сообщение: тело `{"author": "...", "text": "..."}`
 
-## Текущее состояние: «работает у меня»
+## Запуск
 
-Честно предупреждаем: сейчас проект заводится только у автора и только если звёзды сошлись. А именно:
-
-- зависимости лежат в `requirements.txt` и никак не зафиксированы;
-- адрес базы и **пароль зашиты прямо в `main.py`**;
-- нет ни `Dockerfile`, ни `compose.yaml` — базу нужно поднимать и настраивать руками;
-- нет `.gitignore`, нет `.env`.
-
-Вот как автор запускает это у себя (и почему так оставлять нельзя):
+Нужен только Docker с Compose.
 
 ```bash
-pip install -r requirements.txt
-# ... где-то локально поднят PostgreSQL с базой guestbook и тем самым паролем из кода ...
-uvicorn main:app
+cp .env.example .env      # и замените POSTGRES_PASSWORD на свой
+docker compose up -d --build
 ```
 
-## 🎯 Ваша задача
+Приложение будет доступно на <http://localhost:8000> (порт меняется через `APP_PORT`), документация API — на `/docs`.
 
-**Нужно получить** тот же проект, доведённый до прода:
+База наружу не проброшена: она доступна только приложению внутри сети Compose. Данные лежат в именованном томе `db_data` и переживают `docker compose down` / `up`. Полностью удалить их можно через `docker compose down -v`.
 
-- зависимости зафиксированы через **uv** (`pyproject.toml` + `uv.lock`), версия Python закреплена;
-- есть **Dockerfile** и **.dockerignore**, образ собирается;
-- есть **compose.yaml**, поднимающий приложение **и** PostgreSQL одной командой, с правильным порядком запуска и хранением данных;
-- настройки собраны в один конфиг на **pydantic-settings**, в коде нет `os.environ` вразнобой;
-- **секретов нет ни в коде, ни в коммите**: они живут в `.env` (в `.gitignore`), а в репозитории лежит `.env.example`.
+## Настройки
 
-**Бизнес-логику менять не нужно** (эндпоинты и SQL уже работают) — вы работаете с упаковкой, конфигурацией и запуском.
+Все настройки читаются в одном месте — [config.py](config.py) (pydantic-settings) — из переменных окружения или файла `.env`. Список переменных с примерами — в [.env.example](.env.example).
 
-## 🚀 Как начать
+| Переменная          | Назначение                         | По умолчанию |
+|---------------------|------------------------------------|--------------|
+| `POSTGRES_USER`     | пользователь базы                  | —            |
+| `POSTGRES_PASSWORD` | пароль базы                        | —            |
+| `POSTGRES_DB`       | имя базы                           | —            |
+| `DB_HOST`           | адрес базы (в Compose — `db`)      | `localhost`  |
+| `DB_PORT`           | порт базы                          | `5432`       |
+| `GREETING`          | текст приветствия на `/`           | см. конфиг   |
+| `APP_PORT`          | порт приложения на хосте (Compose) | `8000`       |
 
-1. Форкните репозиторий воркшопа к себе (кнопка **Fork**).
-2. Склонируйте форк и заведите рабочую ветку:
+Файл `.env` с реальными значениями в репозиторий не попадает (он в `.gitignore` и `.dockerignore`).
+
+## Проверка
 
 ```bash
-git clone https://github.com/ВАШ-ЛОГИН/guestbook-workshop.git
-cd guestbook-workshop
-git switch -c to-prod
+curl http://localhost:8000/health
+curl -X POST http://localhost:8000/messages \
+  -H "Content-Type: application/json" \
+  -d '{"author": "Аня", "text": "Привет!"}'
+curl http://localhost:8000/messages
+
+docker compose down && docker compose up -d
+curl http://localhost:8000/messages   # сообщение на месте
 ```
 
-3. Выполнить задание, сверяясь с критериями.
+## Локальная разработка без Docker
 
-## ✅ Критерии готовности
-
-- [ ] Зависимости на **uv**: есть `pyproject.toml` и `uv.lock`, `requirements.txt` удалён, версия Python закреплена (`.python-version`)
-- [ ] Есть **`.gitignore`** с `.venv`, `.env`, `__pycache__`
-- [ ] Настройки собраны в **`config.py`** (pydantic-settings); в `main.py` нет зашитых адреса и пароля
-- [ ] Секретов нет ни в коде, ни в коммите: `.env` в `.gitignore`, в репозитории есть **`.env.example`**, в `compose.yaml` пароль через **`${...}`**
-- [ ] Есть **`Dockerfile`** (зависимости ставятся до кода, `--host 0.0.0.0`) и **`.dockerignore`** (без `.env`, `.git`, `.venv`)
-- [ ] **`compose.yaml`** поднимает `app` + `db`; наружу проброшен только `app`; есть `depends_on: service_healthy`, `healthcheck` и `volume`
-- [ ] **Приёмочный тест пройден:** сообщение добавляется, отображается и переживает `down`/`up`
-- [ ] `git grep -i supersecret` не находит ничего; работа влита в `main` через merge
-
-## 🏁 Как завершить
+Зависимости управляются через [uv](https://docs.astral.sh/uv/), версия Python закреплена в `.python-version`.
 
 ```bash
-git add .
-git commit -m "chore: гостевая книга доведена до прода (uv, Docker, Compose, конфиг)"
-git switch main
-git merge to-prod
-git push -u origin main
+uv sync
+uv run uvicorn main:app --reload
 ```
 
+Для этого нужен доступный PostgreSQL с параметрами из `.env`.
